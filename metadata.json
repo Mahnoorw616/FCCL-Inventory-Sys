@@ -1,0 +1,5 @@
+{
+  "name": "FCCL Inventory",
+  "description": "Track FCCL devices, work orders, spare stock and suppliers across all plants.",
+  "requestFramePermissions": []
+}
