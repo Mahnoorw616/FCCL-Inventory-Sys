@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { getInventory, saveInventory, uid, withLog } from '../data/store.js';
 import type { StockDraft } from '../types/inventory.js';
 import { nextNumber } from '../utils/inventoryRules.js';
@@ -13,13 +13,13 @@ function stockProblem(d: StockDraft): string {
 }
 
 // GET all stock items
-router.get('/', (_req, res) => {
+router.get('/', (_req: Request, res: Response) => {
   const inv = getInventory();
   res.json({ success: true, data: inv.stock });
 });
 
 // POST add new stock item
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const input: StockDraft = req.body;
     const error = stockProblem(input);
@@ -50,7 +50,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT update stock item
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const input: StockDraft = req.body;
@@ -86,7 +86,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // PATCH change stock quantity by delta (increment/decrement)
-router.patch('/:id/change', async (req, res) => {
+router.patch('/:id/change', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { change } = req.body as { change: number };
@@ -116,7 +116,7 @@ router.patch('/:id/change', async (req, res) => {
 });
 
 // DELETE stock item
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const cur = getInventory();

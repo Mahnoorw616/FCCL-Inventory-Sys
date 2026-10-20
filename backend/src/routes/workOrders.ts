@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { getInventory, saveInventory, uid, withLog } from '../data/store.js';
 import type { Priority, WorkOrderDraft, WorkStatus } from '../types/inventory.js';
 import { nextNumber } from '../utils/inventoryRules.js';
@@ -6,13 +6,13 @@ import { nextNumber } from '../utils/inventoryRules.js';
 const router = Router();
 
 // GET all work orders
-router.get('/', (_req, res) => {
+router.get('/', (_req: Request, res: Response) => {
   const inv = getInventory();
   res.json({ success: true, data: inv.workOrders });
 });
 
 // POST add work order
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const input: WorkOrderDraft = req.body;
     const title = input.title?.trim();
@@ -46,7 +46,7 @@ router.post('/', async (req, res) => {
 });
 
 // PATCH update status
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { status } = req.body as { status: WorkStatus };
@@ -78,7 +78,7 @@ router.patch('/:id/status', async (req, res) => {
 });
 
 // PATCH update priority
-router.patch('/:id/priority', async (req, res) => {
+router.patch('/:id/priority', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { priority } = req.body as { priority: Priority };
@@ -103,7 +103,7 @@ router.patch('/:id/priority', async (req, res) => {
 });
 
 // DELETE work order
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const cur = getInventory();

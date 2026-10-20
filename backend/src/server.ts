@@ -1,6 +1,6 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import { initStore } from './data/store.js';
 import devicesRouter from './routes/devices.js';
 import inventoryRouter from './routes/inventory.js';
@@ -22,7 +22,7 @@ initStore();
 // Setup CORS
 app.use(
   cors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       // Allow requests with no origin (like mobile apps, curl, or server-to-server)
       if (!origin || CORS_ORIGIN === '*' || CORS_ORIGIN.split(',').map((s) => s.trim()).includes(origin)) {
         return callback(null, true);
@@ -40,7 +40,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logger for Render
-app.use((req, _res, next) => {
+app.use((req: Request, _res: Response, next: NextFunction) => {
   const start = Date.now();
   const { method, url } = req;
   _res.on('finish', () => {
@@ -53,14 +53,14 @@ app.use((req, _res, next) => {
 });
 
 // Health check endpoint (for Render health check & frontend ping)
-app.get('/health', (_req, res) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
   });
 });
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     uptime: Math.floor(process.uptime()),
@@ -78,12 +78,12 @@ app.use('/api/racks', racksRouter);
 app.use('/api/logs', logsRouter);
 
 // 404 Handler
-app.use((_req, res) => {
+app.use((_req: Request, res: Response) => {
   res.status(404).json({ success: false, message: 'API route not found' });
 });
 
 // Global Error Handler
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Unhandled server error:', err);
   res.status(500).json({
     success: false,

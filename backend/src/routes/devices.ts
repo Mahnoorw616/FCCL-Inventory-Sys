@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { getInventory, saveInventory, uid, withLog } from '../data/store.js';
 import type { DeviceDraft } from '../types/inventory.js';
 import { nextNumber, normalizeDraft, validateDevice } from '../utils/inventoryRules.js';
@@ -6,13 +6,13 @@ import { nextNumber, normalizeDraft, validateDevice } from '../utils/inventoryRu
 const router = Router();
 
 // GET all devices
-router.get('/', (_req, res) => {
+router.get('/', (_req: Request, res: Response) => {
   const inv = getInventory();
   res.json({ success: true, data: inv.devices });
 });
 
 // POST add a new device
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const input: DeviceDraft = req.body;
     const draft = normalizeDraft(input);
@@ -36,7 +36,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT update an existing device
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const input: DeviceDraft = req.body;
@@ -74,7 +74,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE a device
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const cur = getInventory();
@@ -96,7 +96,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // POST import multiple devices (from CSV)
-router.post('/import', async (req, res) => {
+router.post('/import', async (req: Request, res: Response) => {
   try {
     const drafts: DeviceDraft[] = req.body?.drafts || [];
     if (!Array.isArray(drafts) || drafts.length === 0) {

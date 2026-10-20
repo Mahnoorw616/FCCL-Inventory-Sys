@@ -1,16 +1,16 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { getInventory, saveInventory, uid, withLog } from '../data/store.js';
 
 const router = Router();
 
 // GET all racks
-router.get('/', (_req, res) => {
+router.get('/', (_req: Request, res: Response) => {
   const inv = getInventory();
   res.json({ success: true, data: inv.racks });
 });
 
 // POST add rack
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const { name, plant, units } = req.body;
     const clean = (name || '').trim();
@@ -54,7 +54,7 @@ router.post('/', async (req, res) => {
 });
 
 // DELETE rack
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const cur = getInventory();
