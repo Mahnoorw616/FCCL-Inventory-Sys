@@ -27,7 +27,10 @@ export default function DeviceFormModal({ inv, device, onClose }: Props) {
 
   const plantOptions = PLANTS.includes(plant) ? PLANTS : [...PLANTS, plant];
 
-  const save = () => {
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
     const draft: DeviceDraft = {
       serial,
       name,
@@ -42,9 +45,18 @@ export default function DeviceFormModal({ inv, device, onClose }: Props) {
       rackUnits: Number(rackUnits),
       notes,
     };
-    const message = device ? inv.updateDevice(device.id, draft) : inv.addDevice(draft);
-    if (message) setError(message);
-    else onClose();
+    try {
+      const message = await (device ? inv.updateDevice(device.id, draft) : inv.addDevice(draft));
+      if (message) {
+        setError(message);
+        setSaving(false);
+      } else {
+        onClose();
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to save device');
+      setSaving(false);
+    }
   };
 
   return (
@@ -120,8 +132,8 @@ export default function DeviceFormModal({ inv, device, onClose }: Props) {
           <button type="button" className={btnOutline} onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className={btnPrimary} onClick={save}>
-            {device ? 'Save changes' : 'Add device'}
+          <button type="button" className={btnPrimary} onClick={save} disabled={saving}>
+            {saving ? 'Saving...' : device ? 'Save changes' : 'Add device'}
           </button>
         </div>
       </div>

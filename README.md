@@ -1,20 +1,67 @@
-# FCCL Inventory
+# FCCL Inventory System
 
-Track devices, work orders, spare stock, racks and suppliers for all FCCL plants.
-Everything is saved in your browser (no server or database needed).
+A modern IT equipment inventory, work order tracker, spare parts management, rack layout, and supplier tracking system for FCCL plants.
 
-## Run it
+The project is structured into a separated **Frontend** (Vite + React) and **Backend** (Node.js + Express REST API), ready for independent deployment on **Vercel** and **Render**.
 
-1. Install Node.js 20 or newer from https://nodejs.org
-2. Open a terminal in this folder and run `npm install`
-3. Run `npm run dev`
-4. Open http://localhost:3000
+---
 
-Other commands: `npm run build` (production build), `npm run lint` (type check), `npm test` (rule tests).
+## Architecture
 
-## How it works
+- **`frontend/`**: React 19, TypeScript, Tailwind CSS, Lucide icons, Vite.
+  - Deployed to: **Vercel**
+  - Features: Real-time UI updates, offline cache resilience, CSV import/export, backend health indicator.
+- **`backend/`**: Node.js, Express, TypeScript.
+  - Deployed to: **Render**
+  - Features: Full REST API, CORS support, persistent JSON data store, automatic seed data generation, health checks.
 
-- Devices are identified by their **serial number**. Each device also gets a simple number (1, 2, 3 ...).
-- A green dot means online, an orange dot means offline. Change it in the device's Edit form.
-- Top bar: Overview, Devices, Work Orders, Stock & Spares. Left menu: Racks, Suppliers, Activity Log.
-- Devices can be exported to and imported from CSV (columns: serial, name, category, model, plant, assigned_to, status, warranty_end, notes).
+---
+
+## Quick Start (Local Development)
+
+```bash
+# 1. Install all dependencies (both backend and frontend)
+npm run install:all
+
+# 2. Run both backend and frontend concurrently
+npm run dev
+```
+
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:5000/api
+- **Health Check**: http://localhost:5000/api/health
+
+### Individual Commands
+
+```bash
+# Frontend only (port 3000)
+npm run dev:frontend
+
+# Backend only (port 5000)
+npm run dev:backend
+
+# Production build test
+npm run build
+
+# Run unit tests
+npm test
+```
+
+---
+
+## Deployment
+
+Complete step-by-step instructions for deploying to **Render** and **Vercel** can be found in [DEPLOYMENT.md](file:///d:/Downloads/fccl-inventory-system/fccl-inventory-system/DEPLOYMENT.md).
+
+1. **Deploy Backend to Render**:
+   - Web Service connected to your GitHub repository.
+   - Root Directory: `backend`
+   - Build Command: `npm install && npm run build`
+   - Start Command: `npm start`
+   - Health Check Path: `/api/health`
+
+2. **Deploy Frontend to Vercel**:
+   - New Project connected to your GitHub repository.
+   - Framework Preset: `Vite`
+   - Root Directory: `frontend`
+   - Environment Variable: `VITE_API_URL` set to `https://<your-render-backend-url>/api`

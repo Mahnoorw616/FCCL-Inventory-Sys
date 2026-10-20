@@ -31,9 +31,9 @@ export default function App() {
     if (q.trim() && view !== 'devices') setView('devices');
   };
 
-  const reset = () => {
+  const reset = async () => {
     if (window.confirm('Replace everything with the sample data? Your own changes will be lost.')) {
-      inv.reset();
+      await inv.reset();
       setQuery('');
       go('overview');
     }
@@ -44,6 +44,9 @@ export default function App() {
       <NavigationHeader
         view={view}
         query={query}
+        status={inv.status}
+        isSyncing={inv.isSyncing}
+        onRefresh={inv.refresh}
         onQuery={search}
         onNavigate={go}
         onOpenDrawer={() => setDrawerOpen(true)}

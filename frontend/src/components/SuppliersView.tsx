@@ -11,11 +11,22 @@ function SupplierForm({ inv, supplier, onClose }: { inv: Inventory; supplier: Su
   const [email, setEmail] = useState(supplier?.email ?? '');
   const [supplies, setSupplies] = useState(supplier?.supplies ?? '');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const save = () => {
-    const message = inv.saveSupplier({ name, contact, phone, email, supplies }, supplier?.id);
-    if (message) setError(message);
-    else onClose();
+  const save = async () => {
+    setSaving(true);
+    try {
+      const message = await inv.saveSupplier({ name, contact, phone, email, supplies }, supplier?.id);
+      if (message) {
+        setError(message);
+        setSaving(false);
+      } else {
+        onClose();
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to save supplier');
+      setSaving(false);
+    }
   };
 
   return (
@@ -43,8 +54,8 @@ function SupplierForm({ inv, supplier, onClose }: { inv: Inventory; supplier: Su
           <button type="button" className={btnOutline} onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className={btnPrimary} onClick={save}>
-            {supplier ? 'Save changes' : 'Add supplier'}
+          <button type="button" className={btnPrimary} onClick={save} disabled={saving}>
+            {saving ? 'Saving...' : supplier ? 'Save changes' : 'Add supplier'}
           </button>
         </div>
       </div>
@@ -57,9 +68,14 @@ export default function SuppliersView({ inv }: { inv: Inventory }) {
   const [editing, setEditing] = useState<Supplier | 'new' | null>(null);
   const [error, setError] = useState('');
 
-  const remove = (s: Supplier) => {
+  const remove = async (s: Supplier) => {
     if (!window.confirm(`Delete ${s.name}?`)) return;
-    setError(inv.deleteSupplier(s.id));
+    try {
+      const err = await inv.deleteSupplier(s.id);
+      setError(err);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete supplier');
+    }
   };
 
   return (

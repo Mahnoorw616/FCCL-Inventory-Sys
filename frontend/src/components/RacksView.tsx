@@ -43,16 +43,29 @@ export default function RacksView({ inv }: { inv: Inventory }) {
   const [plant, setPlant] = useState(PLANTS[0]);
   const [units, setUnits] = useState('42');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const add = () => {
-    const message = inv.addRack(name, plant, Number(units));
-    setError(message);
-    if (!message) setName('');
+  const add = async () => {
+    setSaving(true);
+    try {
+      const message = await inv.addRack(name, plant, Number(units));
+      setError(message);
+      if (!message) setName('');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to add rack');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const remove = (r: Rack) => {
+  const remove = async (r: Rack) => {
     if (!window.confirm(`Delete ${r.name}?`)) return;
-    setError(inv.deleteRack(r.id));
+    try {
+      const err = await inv.deleteRack(r.id);
+      setError(err);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete rack');
+    }
   };
 
   return (
@@ -74,8 +87,8 @@ export default function RacksView({ inv }: { inv: Inventory }) {
           <Field label="Units">
             <input className={inputCls} type="number" min={1} max={60} value={units} onChange={(e) => setUnits(e.target.value)} />
           </Field>
-          <button type="button" className={btnPrimary} onClick={add}>
-            <Plus size={16} /> Add rack
+          <button type="button" className={btnPrimary} onClick={add} disabled={saving}>
+            <Plus size={16} /> {saving ? 'Adding...' : 'Add rack'}
           </button>
         </div>
         {error ? (

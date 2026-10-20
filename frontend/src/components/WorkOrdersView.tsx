@@ -11,11 +11,22 @@ function NewOrder({ inv, onClose }: { inv: Inventory; onClose: () => void }) {
   const [assignee, setAssignee] = useState('IT team');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const save = () => {
-    const message = inv.addWorkOrder({ title, deviceSerial, priority, assignee, notes });
-    if (message) setError(message);
-    else onClose();
+  const save = async () => {
+    setSaving(true);
+    try {
+      const message = await inv.addWorkOrder({ title, deviceSerial, priority, assignee, notes });
+      if (message) {
+        setError(message);
+        setSaving(false);
+      } else {
+        onClose();
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to save work order');
+      setSaving(false);
+    }
   };
 
   return (
@@ -54,8 +65,8 @@ function NewOrder({ inv, onClose }: { inv: Inventory; onClose: () => void }) {
           <button type="button" className={btnOutline} onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className={btnPrimary} onClick={save}>
-            Create
+          <button type="button" className={btnPrimary} onClick={save} disabled={saving}>
+            {saving ? 'Creating...' : 'Create'}
           </button>
         </div>
       </div>

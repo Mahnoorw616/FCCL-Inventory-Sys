@@ -13,12 +13,23 @@ function StockForm({ inv, item, onClose }: { inv: Inventory; item: StockItem | n
   const [location, setLocation] = useState(item?.location ?? '');
   const [supplierId, setSupplierId] = useState(item?.supplierId ?? '');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const save = () => {
+  const save = async () => {
+    setSaving(true);
     const draft = { name, category: category.trim(), quantity: Number(quantity), minimum: Number(minimum), location: location.trim(), supplierId };
-    const message = item ? inv.updateStock(item.id, draft) : inv.addStock(draft);
-    if (message) setError(message);
-    else onClose();
+    try {
+      const message = await (item ? inv.updateStock(item.id, draft) : inv.addStock(draft));
+      if (message) {
+        setError(message);
+        setSaving(false);
+      } else {
+        onClose();
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to save stock item');
+      setSaving(false);
+    }
   };
 
   return (
@@ -56,8 +67,8 @@ function StockForm({ inv, item, onClose }: { inv: Inventory; item: StockItem | n
           <button type="button" className={btnOutline} onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className={btnPrimary} onClick={save}>
-            {item ? 'Save changes' : 'Add item'}
+          <button type="button" className={btnPrimary} onClick={save} disabled={saving}>
+            {saving ? 'Saving...' : item ? 'Save changes' : 'Add item'}
           </button>
         </div>
       </div>
