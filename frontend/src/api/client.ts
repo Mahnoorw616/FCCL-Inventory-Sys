@@ -13,37 +13,71 @@ import type {
   WorkStatus,
 } from '../types/inventory';
 
-// Base API URL:
-// In production on Vercel, set VITE_API_URL to your Render backend URL (e.g. https://fccl-inventory-backend.onrender.com/api)
-// In local dev, defaults to '/api' which Vite proxies to http://localhost:5000
-const rawUrl = (import.meta.env.VITE_API_URL as string | undefined) || '/api';
-export const API_BASE = rawUrl.replace(/\/+$/, '');
+// Resolve Backend API URL:
+// 1. If VITE_API_URL is configured (e.g. on Vercel), use it.
+// 2. If in local development, use '/api' (proxied by Vite to http://localhost:5000).
+// 3. Fallback to the live deployed Render backend URL so it works out of the box even without Vercel env setup.
+function resolveApiBase(): string {
+  const envUrl = import.meta.env.VITE_API_URL as string | undefined;
+  if (envUrl && envUrl.trim()) {
+    let clean = envUrl.trim().replace(/\/+$/, '');
+    if (!clean.endsWith('/api') && !clean.includes('/api/')) {
+      clean += '/api';
+    }
+    return clean;
+  }
+
+  // In local development, Vite proxies '/api' to local backend (port 5000)
+  if (import.meta.env.DEV) {
+    return '/api';
+  }
+
+  // Production default pointing to the live Render backend
+  return 'https://fccl-inventory-sys.onrender.com/api';
+}
+
+export const API_BASE = resolveApiBase();
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const url = `${API_BASE}${cleanPath}`;
   const headers = new Headers(options.headers || {});
 
   if (!headers.has('Content-Type') && options.body && typeof options.body === 'string') {
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  // Set 45s timeout to gracefully accommodate Render free-tier cold starts (~25-35s)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 45000);
 
-  const contentType = response.headers.get('content-type');
-  const isJson = contentType && contentType.includes('application/json');
-  const data = isJson ? await response.json() : await response.text();
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    const errorMsg =
-      (typeof data === 'object' && data !== null && (data as any).message) ||
-      `Request failed (${response.status}: ${response.statusText})`;
-    throw new Error(errorMsg);
+    const contentType = response.headers.get('content-type');
+    const isJson = contentType && contentType.includes('application/json');
+    const data = isJson ? await response.json() : await response.text();
+
+    if (!response.ok) {
+      const errorMsg =
+        (typeof data === 'object' && data !== null && (data as any).message) ||
+        `Request failed (${response.status}: ${response.statusText})`;
+      throw new Error(errorMsg);
+    }
+
+    return (typeof data === 'object' && data !== null && 'data' in data ? (data as any).data : data) as T;
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('Server connection timed out (backend may still be waking up, please retry)');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return (typeof data === 'object' && data !== null && 'data' in data ? (data as any).data : data) as T;
 }
 
 export const api = {

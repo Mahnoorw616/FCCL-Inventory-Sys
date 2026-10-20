@@ -10,7 +10,7 @@ import type {
   WorkOrderDraft,
   WorkStatus,
 } from '../types/inventory';
-import { nextNumber, normalizeDraft, validateDevice } from '../utils/inventoryRules';
+import { normalizeDraft, validateDevice } from '../utils/inventoryRules';
 
 const STORAGE_KEY = 'fccl-inventory-v1';
 
@@ -35,7 +35,7 @@ function loadLocal(): InventoryData {
       if (isValid(parsed)) return parsed;
     }
   } catch {
-    /* fall through to sample data */
+    /* fallback to seed data */
   }
   return createSeedData();
 }
@@ -47,7 +47,7 @@ function withLog(data: InventoryData, text: string): InventoryData {
 }
 
 function stockProblem(d: StockDraft): string {
-  if (!d.name.trim()) return 'Enter the item name.';
+  if (!d.name || !d.name.trim()) return 'Enter the item name.';
   if (!Number.isInteger(d.quantity) || d.quantity < 0) return 'Quantity must be a whole number, 0 or more.';
   if (!Number.isInteger(d.minimum) || d.minimum < 0) return 'Minimum must be a whole number, 0 or more.';
   return '';
@@ -62,18 +62,19 @@ export function useInventory() {
   const ref = useRef(data);
   ref.current = data;
 
-  // Persist local copy for fast hydration and offline resiliency
+  // Persist local copy for fast hydration and offline cache
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
-      /* storage quota exceeded or disabled */
+      /* quota exceeded or private mode */
     }
   }, [data]);
 
   // Fetch initial data from backend API
   const refreshFromBackend = useCallback(async () => {
     setIsSyncing(true);
+    setStatus('connecting');
     try {
       const remoteData = await api.getInventory();
       if (isValid(remoteData)) {
@@ -109,28 +110,19 @@ export function useInventory() {
         const error = validateDevice(draft, cur.devices, cur.racks);
         if (error) return error;
 
-        // Optimistic local update
-        const tempId = uid('d');
-        const tempDevice = { ...draft, id: tempId, no: nextNumber(cur.devices) };
-        apply((d) =>
-          withLog(
-            { ...d, devices: [...d.devices, tempDevice] },
-            `Added device ${draft.name} (${draft.serial})`,
-          ),
-        );
-
-        // Sync with backend
         try {
           const created = await api.createDevice(draft);
-          apply((d) => ({
-            ...d,
-            devices: d.devices.map((dev) => (dev.id === tempId ? created : dev)),
-          }));
+          apply((d) =>
+            withLog(
+              { ...d, devices: [...d.devices, created] },
+              `Added device ${created.name} (${created.serial})`,
+            ),
+          );
           setStatus('connected');
           return '';
         } catch (err: any) {
-          console.error('Failed to sync device to backend:', err);
-          return err?.message || 'Failed to save to server';
+          console.error('Failed to add device on server:', err);
+          return err?.message || 'Failed to save device to server';
         }
       },
 
@@ -142,138 +134,146 @@ export function useInventory() {
         const error = validateDevice(draft, cur.devices, cur.racks, id);
         if (error) return error;
 
-        // Optimistic update
-        apply((d) =>
-          withLog(
-            {
-              ...d,
-              devices: d.devices.map((x) => (x.id === id ? { ...x, ...draft } : x)),
-              workOrders:
-                old.serial === draft.serial
-                  ? d.workOrders
-                  : d.workOrders.map((w) => (w.deviceSerial === old.serial ? { ...w, deviceSerial: draft.serial } : w)),
-            },
-            `Updated device ${draft.name} (${draft.serial})`,
-          ),
-        );
-
-        // Backend sync
         try {
-          await api.updateDevice(id, draft);
+          const updated = await api.updateDevice(id, draft);
+          apply((d) =>
+            withLog(
+              {
+                ...d,
+                devices: d.devices.map((x) => (x.id === id ? updated : x)),
+                workOrders:
+                  old.serial === updated.serial
+                    ? d.workOrders
+                    : d.workOrders.map((w) =>
+                        w.deviceSerial === old.serial ? { ...w, deviceSerial: updated.serial } : w,
+                      ),
+              },
+              `Updated device ${updated.name} (${updated.serial})`,
+            ),
+          );
           setStatus('connected');
           return '';
         } catch (err: any) {
-          console.error('Failed to sync updated device to backend:', err);
+          console.error('Failed to update device on server:', err);
           return err?.message || 'Failed to update device on server';
         }
       },
 
-      async deleteDevice(id: string): Promise<void> {
+      async deleteDevice(id: string): Promise<string> {
         const old = ref.current.devices.find((d) => d.id === id);
-        if (!old) return;
-        apply((d) => withLog({ ...d, devices: d.devices.filter((x) => x.id !== id) }, `Deleted device ${old.name} (${old.serial})`));
+        if (!old) return 'Device not found';
 
         try {
           await api.deleteDevice(id);
+          apply((d) =>
+            withLog(
+              { ...d, devices: d.devices.filter((x) => x.id !== id) },
+              `Deleted device ${old.name} (${old.serial})`,
+            ),
+          );
           setStatus('connected');
-        } catch (err) {
+          return '';
+        } catch (err: any) {
           console.error('Failed to delete device on backend:', err);
+          return err?.message || 'Failed to delete device';
         }
       },
 
-      async importDevices(drafts: DeviceDraft[]): Promise<void> {
-        if (drafts.length === 0) return;
-        apply((d) => {
-          let no = nextNumber(d.devices);
-          const added = drafts.map((x) => ({ ...x, id: uid('d'), no: no++ }));
-          return withLog({ ...d, devices: [...d.devices, ...added] }, `Imported ${added.length} devices from CSV`);
-        });
-
+      async importDevices(drafts: DeviceDraft[]): Promise<string> {
+        if (drafts.length === 0) return '';
         try {
-          await api.importDevices(drafts);
-          await refreshFromBackend();
+          const res = await api.importDevices(drafts);
+          if (res?.data && Array.isArray(res.data)) {
+            apply((d) =>
+              withLog(
+                { ...d, devices: [...d.devices, ...res.data] },
+                `Imported ${res.data.length} devices from CSV`,
+              ),
+            );
+          } else {
+            await refreshFromBackend();
+          }
           setStatus('connected');
-        } catch (err) {
+          return '';
+        } catch (err: any) {
           console.error('Failed to sync imported devices to backend:', err);
+          return err?.message || 'Failed to import devices';
         }
       },
 
       /* work orders */
       async addWorkOrder(input: WorkOrderDraft): Promise<string> {
-        const title = input.title.trim();
+        const title = input.title?.trim();
         if (!title) return 'Enter what needs to be done.';
-        const tempId = uid('w');
-        const tempWorkOrder = {
-          id: tempId,
-          no: nextNumber(ref.current.workOrders),
-          title,
-          deviceSerial: input.deviceSerial,
-          priority: input.priority,
-          status: 'Open' as WorkStatus,
-          assignee: input.assignee.trim(),
-          notes: input.notes.trim(),
-          createdAt: new Date().toISOString(),
-        };
-
-        apply((d) =>
-          withLog(
-            { ...d, workOrders: [...d.workOrders, tempWorkOrder] },
-            `Created work order: ${title}`,
-          ),
-        );
 
         try {
           const created = await api.createWorkOrder(input);
-          apply((d) => ({
-            ...d,
-            workOrders: d.workOrders.map((w) => (w.id === tempId ? created : w)),
-          }));
+          apply((d) =>
+            withLog(
+              { ...d, workOrders: [...d.workOrders, created] },
+              `Created work order: ${created.title}`,
+            ),
+          );
           setStatus('connected');
           return '';
         } catch (err: any) {
-          console.error('Failed to sync work order to backend:', err);
+          console.error('Failed to create work order on server:', err);
           return err?.message || 'Failed to save work order';
         }
       },
 
-      async setWorkStatus(id: string, nextStatus: WorkStatus): Promise<void> {
+      async setWorkStatus(id: string, nextStatus: WorkStatus): Promise<string> {
         const old = ref.current.workOrders.find((w) => w.id === id);
-        if (!old || old.status === nextStatus) return;
-        apply((d) =>
-          withLog(
-            { ...d, workOrders: d.workOrders.map((w) => (w.id === id ? { ...w, status: nextStatus } : w)) },
-            `Work order #${old.no} is now ${nextStatus.toLowerCase()}`,
-          ),
-        );
+        if (!old || old.status === nextStatus) return '';
 
         try {
-          await api.setWorkStatus(id, nextStatus);
+          const updated = await api.setWorkStatus(id, nextStatus);
+          apply((d) =>
+            withLog(
+              { ...d, workOrders: d.workOrders.map((w) => (w.id === id ? updated : w)) },
+              `Work order #${old.no} is now ${nextStatus.toLowerCase()}`,
+            ),
+          );
           setStatus('connected');
-        } catch (err) {
-          console.error('Failed to sync work status to backend:', err);
+          return '';
+        } catch (err: any) {
+          console.error('Failed to update work order status on server:', err);
+          return err?.message || 'Failed to update status';
         }
       },
 
-      async setWorkPriority(id: string, priority: Priority): Promise<void> {
-        apply((d) => ({ ...d, workOrders: d.workOrders.map((w) => (w.id === id ? { ...w, priority } : w)) }));
+      async setWorkPriority(id: string, priority: Priority): Promise<string> {
         try {
-          await api.setWorkPriority(id, priority);
+          const updated = await api.setWorkPriority(id, priority);
+          apply((d) => ({
+            ...d,
+            workOrders: d.workOrders.map((w) => (w.id === id ? updated : w)),
+          }));
           setStatus('connected');
-        } catch (err) {
-          console.error('Failed to sync priority to backend:', err);
+          return '';
+        } catch (err: any) {
+          console.error('Failed to update work order priority on server:', err);
+          return err?.message || 'Failed to update priority';
         }
       },
 
-      async deleteWorkOrder(id: string): Promise<void> {
+      async deleteWorkOrder(id: string): Promise<string> {
         const old = ref.current.workOrders.find((w) => w.id === id);
-        if (!old) return;
-        apply((d) => withLog({ ...d, workOrders: d.workOrders.filter((w) => w.id !== id) }, `Deleted work order #${old.no}`));
+        if (!old) return '';
 
         try {
           await api.deleteWorkOrder(id);
+          apply((d) =>
+            withLog(
+              { ...d, workOrders: d.workOrders.filter((w) => w.id !== id) },
+              `Deleted work order #${old.no}`,
+            ),
+          );
           setStatus('connected');
-        } catch (err) {
+          return '';
+        } catch (err: any) {
           console.error('Failed to delete work order on backend:', err);
+          return err?.message || 'Failed to delete work order';
         }
       },
 
@@ -282,25 +282,18 @@ export function useInventory() {
         const error = stockProblem(input);
         if (error) return error;
 
-        const tempId = uid('s');
-        const tempItem = { ...input, name: input.name.trim(), id: tempId, no: nextNumber(ref.current.stock) };
-        apply((d) =>
-          withLog(
-            { ...d, stock: [...d.stock, tempItem] },
-            `Added stock item ${input.name.trim()}`,
-          ),
-        );
-
         try {
           const created = await api.createStock(input);
-          apply((d) => ({
-            ...d,
-            stock: d.stock.map((s) => (s.id === tempId ? created : s)),
-          }));
+          apply((d) =>
+            withLog(
+              { ...d, stock: [...d.stock, created] },
+              `Added stock item ${created.name}`,
+            ),
+          );
           setStatus('connected');
           return '';
         } catch (err: any) {
-          console.error('Failed to add stock item to backend:', err);
+          console.error('Failed to add stock item on server:', err);
           return err?.message || 'Failed to add stock';
         }
       },
@@ -309,94 +302,100 @@ export function useInventory() {
         const error = stockProblem(input);
         if (error) return error;
 
-        apply((d) =>
-          withLog(
-            { ...d, stock: d.stock.map((s) => (s.id === id ? { ...s, ...input, name: input.name.trim() } : s)) },
-            `Updated stock item ${input.name.trim()}`,
-          ),
-        );
-
         try {
-          await api.updateStock(id, input);
+          const updated = await api.updateStock(id, input);
+          apply((d) =>
+            withLog(
+              { ...d, stock: d.stock.map((s) => (s.id === id ? updated : s)) },
+              `Updated stock item ${updated.name}`,
+            ),
+          );
           setStatus('connected');
           return '';
         } catch (err: any) {
-          console.error('Failed to update stock item on backend:', err);
+          console.error('Failed to update stock item on server:', err);
           return err?.message || 'Failed to update stock';
         }
       },
 
-      async changeStock(id: string, change: number): Promise<void> {
+      async changeStock(id: string, change: number): Promise<string> {
         const old = ref.current.stock.find((s) => s.id === id);
-        if (!old) return;
+        if (!old) return '';
         const quantity = Math.max(0, old.quantity + change);
-        if (quantity === old.quantity) return;
-        apply((d) =>
-          withLog(
-            { ...d, stock: d.stock.map((s) => (s.id === id ? { ...s, quantity } : s)) },
-            `${old.name}: stock ${old.quantity} → ${quantity}`,
-          ),
-        );
+        if (quantity === old.quantity) return '';
 
         try {
-          await api.changeStock(id, change);
+          const updated = await api.changeStock(id, change);
+          apply((d) =>
+            withLog(
+              { ...d, stock: d.stock.map((s) => (s.id === id ? updated : s)) },
+              `${old.name}: stock ${old.quantity} → ${quantity}`,
+            ),
+          );
           setStatus('connected');
-        } catch (err) {
-          console.error('Failed to adjust stock on backend:', err);
+          return '';
+        } catch (err: any) {
+          console.error('Failed to change stock on server:', err);
+          return err?.message || 'Failed to change stock';
         }
       },
 
-      async deleteStock(id: string): Promise<void> {
+      async deleteStock(id: string): Promise<string> {
         const old = ref.current.stock.find((s) => s.id === id);
-        if (!old) return;
-        apply((d) => withLog({ ...d, stock: d.stock.filter((s) => s.id !== id) }, `Deleted stock item ${old.name}`));
+        if (!old) return '';
 
         try {
           await api.deleteStock(id);
+          apply((d) =>
+            withLog(
+              { ...d, stock: d.stock.filter((s) => s.id !== id) },
+              `Deleted stock item ${old.name}`,
+            ),
+          );
           setStatus('connected');
-        } catch (err) {
-          console.error('Failed to delete stock on backend:', err);
+          return '';
+        } catch (err: any) {
+          console.error('Failed to delete stock item on backend:', err);
+          return err?.message || 'Failed to delete stock item';
         }
       },
 
       /* suppliers */
       async saveSupplier(input: SupplierDraft, id?: string): Promise<string> {
-        const name = input.name.trim();
+        const name = input.name?.trim();
         if (!name) return 'Enter the supplier name.';
         const clean = {
           ...input,
           name,
-          contact: input.contact.trim(),
-          phone: input.phone.trim(),
-          email: input.email.trim(),
-          supplies: input.supplies.trim(),
+          contact: (input.contact || '').trim(),
+          phone: (input.phone || '').trim(),
+          email: (input.email || '').trim(),
+          supplies: (input.supplies || '').trim(),
         };
 
-        if (id) {
-          apply((d) => withLog({ ...d, suppliers: d.suppliers.map((s) => (s.id === id ? { ...s, ...clean } : s)) }, `Updated supplier ${name}`));
-          try {
-            await api.updateSupplier(id, clean);
-            setStatus('connected');
-            return '';
-          } catch (err: any) {
-            console.error('Failed to update supplier on backend:', err);
-            return err?.message || 'Failed to update supplier';
-          }
-        } else {
-          const tempId = uid('p');
-          apply((d) => withLog({ ...d, suppliers: [...d.suppliers, { ...clean, id: tempId }] }, `Added supplier ${name}`));
-          try {
+        try {
+          if (id) {
+            const updated = await api.updateSupplier(id, clean);
+            apply((d) =>
+              withLog(
+                { ...d, suppliers: d.suppliers.map((s) => (s.id === id ? updated : s)) },
+                `Updated supplier ${name}`,
+              ),
+            );
+          } else {
             const created = await api.createSupplier(clean);
-            apply((d) => ({
-              ...d,
-              suppliers: d.suppliers.map((s) => (s.id === tempId ? created : s)),
-            }));
-            setStatus('connected');
-            return '';
-          } catch (err: any) {
-            console.error('Failed to save supplier to backend:', err);
-            return err?.message || 'Failed to save supplier';
+            apply((d) =>
+              withLog(
+                { ...d, suppliers: [...d.suppliers, created] },
+                `Added supplier ${name}`,
+              ),
+            );
           }
+          setStatus('connected');
+          return '';
+        } catch (err: any) {
+          console.error('Failed to save supplier on server:', err);
+          return err?.message || 'Failed to save supplier';
         }
       },
 
@@ -406,10 +405,14 @@ export function useInventory() {
         if (!old) return '';
         if (cur.stock.some((s) => s.supplierId === id)) return 'Some stock items use this supplier. Change them first.';
 
-        apply((d) => withLog({ ...d, suppliers: d.suppliers.filter((s) => s.id !== id) }, `Deleted supplier ${old.name}`));
-
         try {
           await api.deleteSupplier(id);
+          apply((d) =>
+            withLog(
+              { ...d, suppliers: d.suppliers.filter((s) => s.id !== id) },
+              `Deleted supplier ${old.name}`,
+            ),
+          );
           setStatus('connected');
           return '';
         } catch (err: any) {
@@ -425,19 +428,18 @@ export function useInventory() {
         if (!Number.isInteger(units) || units < 1 || units > 60) return 'Rack size must be a whole number from 1 to 60.';
         if (ref.current.racks.some((r) => r.name.toLowerCase() === clean.toLowerCase())) return 'A rack with this name already exists.';
 
-        const tempId = uid('r');
-        apply((d) => withLog({ ...d, racks: [...d.racks, { id: tempId, name: clean, plant, units }] }, `Added rack ${clean}`));
-
         try {
           const created = await api.createRack(clean, plant, units);
-          apply((d) => ({
-            ...d,
-            racks: d.racks.map((r) => (r.id === tempId ? created : r)),
-          }));
+          apply((d) =>
+            withLog(
+              { ...d, racks: [...d.racks, created] },
+              `Added rack ${clean}`,
+            ),
+          );
           setStatus('connected');
           return '';
         } catch (err: any) {
-          console.error('Failed to save rack to backend:', err);
+          console.error('Failed to add rack on server:', err);
           return err?.message || 'Failed to add rack';
         }
       },
@@ -448,10 +450,14 @@ export function useInventory() {
         if (!old) return '';
         if (cur.devices.some((x) => x.rack === id)) return 'Remove the devices from this rack first.';
 
-        apply((d) => withLog({ ...d, racks: d.racks.filter((r) => r.id !== id) }, `Deleted rack ${old.name}`));
-
         try {
           await api.deleteRack(id);
+          apply((d) =>
+            withLog(
+              { ...d, racks: d.racks.filter((r) => r.id !== id) },
+              `Deleted rack ${old.name}`,
+            ),
+          );
           setStatus('connected');
           return '';
         } catch (err: any) {
@@ -460,6 +466,7 @@ export function useInventory() {
         }
       },
 
+      /* reset */
       async reset(): Promise<void> {
         try {
           const fresh = await api.resetInventory();

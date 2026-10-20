@@ -14,24 +14,20 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
 // Initialize persistent JSON store
 initStore();
 
-// Setup CORS
+// Setup CORS - allow Vercel domain, localhost, and all origins
 app.use(
   cors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      // Allow requests with no origin (like mobile apps, curl, or server-to-server)
-      if (!origin || CORS_ORIGIN === '*' || CORS_ORIGIN.split(',').map((s) => s.trim()).includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(null, true); // Permissive fallback to prevent deployment CORS blockers
+      // Allow all incoming origins dynamically so Vercel preview/production and localhost work
+      callback(null, true);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   }),
 );
 
@@ -45,14 +41,14 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
   const { method, url } = req;
   _res.on('finish', () => {
     const ms = Date.now() - start;
-    if (url !== '/api/health') {
+    if (url !== '/api/health' && url !== '/health') {
       console.log(`[${new Date().toISOString()}] ${method} ${url} ${_res.statusCode} - ${ms}ms`);
     }
   });
   next();
 });
 
-// Health check endpoint (for Render health check & frontend ping)
+// Health check endpoints (for Render health check & frontend ping)
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
@@ -68,18 +64,23 @@ app.get('/api/health', (_req: Request, res: Response) => {
   });
 });
 
-// Mount API routes
-app.use('/api/inventory', inventoryRouter);
-app.use('/api/devices', devicesRouter);
-app.use('/api/work-orders', workOrdersRouter);
-app.use('/api/stock', stockRouter);
-app.use('/api/suppliers', suppliersRouter);
-app.use('/api/racks', racksRouter);
-app.use('/api/logs', logsRouter);
+// Create shared router mounted on both /api and root /
+const apiRouter = express.Router();
+apiRouter.use('/inventory', inventoryRouter);
+apiRouter.use('/devices', devicesRouter);
+apiRouter.use('/work-orders', workOrdersRouter);
+apiRouter.use('/stock', stockRouter);
+apiRouter.use('/suppliers', suppliersRouter);
+apiRouter.use('/racks', racksRouter);
+apiRouter.use('/logs', logsRouter);
+
+// Support BOTH /api/* and /* so requests work regardless of whether client sends /api prefix
+app.use('/api', apiRouter);
+app.use('/', apiRouter);
 
 // 404 Handler
-app.use((_req: Request, res: Response) => {
-  res.status(404).json({ success: false, message: 'API route not found' });
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ success: false, message: `API route not found: ${req.method} ${req.originalUrl}` });
 });
 
 // Global Error Handler

@@ -45,7 +45,7 @@ export default function DevicesView({ inv, query, onClearQuery, onAdd, onEdit }:
     if (!file) return;
     const text = await file.text();
     const { drafts, errors } = parseDevicesCsv(text, devices);
-    inv.importDevices(drafts);
+    await inv.importDevices(drafts);
     setMessage({
       ok: drafts.length > 0 && errors.length === 0,
       lines: [`${drafts.length} device${drafts.length === 1 ? '' : 's'} added.`, ...errors.slice(0, 8), ...(errors.length > 8 ? [`...and ${errors.length - 8} more problems.`] : [])],
@@ -53,8 +53,10 @@ export default function DevicesView({ inv, query, onClearQuery, onAdd, onEdit }:
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const remove = (d: Device) => {
-    if (window.confirm(`Delete ${d.name} (${d.serial})?`)) inv.deleteDevice(d.id);
+  const remove = async (d: Device) => {
+    if (window.confirm(`Delete ${d.name} (${d.serial})?`)) {
+      await inv.deleteDevice(d.id);
+    }
   };
 
   const rackName = (id: string) => racks.find((r) => r.id === id)?.name ?? '';
