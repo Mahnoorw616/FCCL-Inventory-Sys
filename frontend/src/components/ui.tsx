@@ -36,7 +36,19 @@ export function Badge({ tone = 'gray', children }: { tone?: keyof typeof badgeTo
   return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${badgeTones[tone]}`}>{children}</span>;
 }
 
-export function Modal({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+export function Modal({
+  title,
+  subtitle,
+  onClose,
+  children,
+  wide = false,
+}: {
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+  children: ReactNode;
+  wide?: boolean;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -47,16 +59,51 @@ export function Modal({ title, onClose, children, wide = false }: { title: strin
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="fixed inset-0 bg-slate-900/50" onClick={onClose} />
-      <div className={`relative my-4 w-full ${wide ? 'max-w-2xl' : 'max-w-md'} rounded-xl bg-white shadow-xl`}>
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-          <h2 className="text-base font-bold text-slate-900">{title}</h2>
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity" onClick={onClose} />
+      <div className={`relative my-4 flex max-h-[92vh] w-full ${wide ? 'max-w-2xl' : 'max-w-xl'} flex-col rounded-xl bg-white shadow-2xl`}>
+        <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 sm:text-lg">{title}</h2>
+            {subtitle ? <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p> : null}
+          </div>
           <button type="button" className={iconBtn} onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="overflow-y-auto px-6 py-5">{children}</div>
       </div>
+    </div>
+  );
+}
+
+export function FormRow({
+  label,
+  children,
+  hint,
+  required = false,
+}: {
+  label: string;
+  children: ReactNode;
+  hint?: string;
+  required?: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-1.5 py-1.5 sm:grid-cols-[190px_1fr] sm:items-center sm:gap-4">
+      <div className="text-sm font-medium text-slate-700">
+        {label}
+        {required && <span className="ml-1 text-red-500">*</span>}
+        {hint && <span className="mt-0.5 block text-xs font-normal text-slate-400">{hint}</span>}
+      </div>
+      <div className="w-full">{children}</div>
+    </div>
+  );
+}
+
+export function FormSectionHeader({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="border-t border-slate-200 pt-3 pb-1 mt-2">
+      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">{title}</h3>
+      {description && <p className="text-xs text-slate-400">{description}</p>}
     </div>
   );
 }

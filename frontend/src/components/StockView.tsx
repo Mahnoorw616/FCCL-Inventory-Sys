@@ -3,7 +3,7 @@ import { Minus, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { Inventory } from '../store/useInventory';
 import type { StockItem } from '../types/inventory';
 import { isLowStock } from '../utils/inventoryRules';
-import { Badge, btnOutline, btnPrimary, Empty, ErrorText, Field, iconBtn, inputCls, Modal, PageTitle } from './ui';
+import { Badge, btnOutline, btnPrimary, Empty, ErrorText, Field, FormRow, iconBtn, inputCls, Modal, PageTitle } from './ui';
 
 function StockForm({ inv, item, onClose }: { inv: Inventory; item: StockItem | null; onClose: () => void }) {
   const [name, setName] = useState(item?.name ?? '');
@@ -32,46 +32,103 @@ function StockForm({ inv, item, onClose }: { inv: Inventory; item: StockItem | n
     }
   };
 
+  const nextNo = item?.no ?? ((inv.data.stock.reduce((m, s) => Math.max(m, s.no), 0)) + 1);
+
   return (
-    <Modal title={item ? 'Edit stock item' : 'Add stock item'} onClose={onClose}>
-      <div className="space-y-4">
+    <Modal
+      title={item ? `Edit Stock Item #${item.no}` : 'Register Stock Item'}
+      subtitle={`Assigned Number: Item #${nextNo}`}
+      onClose={onClose}
+      wide
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+        className="space-y-3"
+      >
         <ErrorText message={error} />
-        <Field label="Item name">
-          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-        </Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Group">
-            <input className={inputCls} value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Cables" />
-          </Field>
-          <Field label="Location">
-            <input className={inputCls} value={location} onChange={(e) => setLocation(e.target.value)} />
-          </Field>
-          <Field label="In stock">
-            <input className={inputCls} type="number" min={0} value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-          </Field>
-          <Field label="Warn me at or below" hint="Shown as low stock.">
-            <input className={inputCls} type="number" min={0} value={minimum} onChange={(e) => setMinimum(e.target.value)} />
-          </Field>
-        </div>
-        <Field label="Supplier">
+
+        <FormRow label="Item Number" hint="Sequential inventory index">
+          <input
+            className={`${inputCls} bg-slate-50 font-mono text-slate-500 cursor-not-allowed`}
+            value={`Item #${nextNo}`}
+            disabled
+            readOnly
+          />
+        </FormRow>
+
+        <FormRow label="Item Name" required hint="Part name or description">
+          <input
+            className={inputCls}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Laptop battery (Latitude 5440)"
+            autoFocus
+            required
+          />
+        </FormRow>
+
+        <FormRow label="Category / Group" hint="Classification group">
+          <input
+            className={inputCls}
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="e.g. Laptop parts, Storage, Cables"
+          />
+        </FormRow>
+
+        <FormRow label="Storage Location" hint="Room or shelf location">
+          <input
+            className={inputCls}
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="e.g. Main Plant store, Cabinet 3"
+          />
+        </FormRow>
+
+        <FormRow label="Quantity in Stock" required hint="Current physical units count">
+          <input
+            className={inputCls}
+            type="number"
+            min={0}
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            required
+          />
+        </FormRow>
+
+        <FormRow label="Minimum Alert Level" hint="Warn when stock drops at or below">
+          <input
+            className={inputCls}
+            type="number"
+            min={0}
+            value={minimum}
+            onChange={(e) => setMinimum(e.target.value)}
+          />
+        </FormRow>
+
+        <FormRow label="Primary Supplier">
           <select className={inputCls} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-            <option value="">No supplier</option>
+            <option value="">None / Unknown</option>
             {inv.data.suppliers.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name}
+                {s.name} ({s.supplies || 'General'})
               </option>
             ))}
           </select>
-        </Field>
-        <div className="flex justify-end gap-2">
-          <button type="button" className={btnOutline} onClick={onClose}>
+        </FormRow>
+
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+          <button type="button" className={btnOutline} onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button type="button" className={btnPrimary} onClick={save} disabled={saving}>
-            {saving ? 'Saving...' : item ? 'Save changes' : 'Add item'}
+          <button type="submit" className={btnPrimary} disabled={saving}>
+            {saving ? 'Saving...' : item ? 'Save Changes' : 'Register Stock Item'}
           </button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }

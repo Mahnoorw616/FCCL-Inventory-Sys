@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Inventory } from '../store/useInventory';
 import { PRIORITIES, WORK_STATUSES, type Priority, type WorkStatus } from '../types/inventory';
-import { Badge, btnOutline, btnPrimary, Empty, ErrorText, Field, formatDate, iconBtn, inputCls, Modal, PageTitle } from './ui';
+import { Badge, btnOutline, btnPrimary, Empty, ErrorText, Field, formatDate, FormRow, iconBtn, inputCls, Modal, PageTitle } from './ui';
 
 function NewOrder({ inv, onClose }: { inv: Inventory; onClose: () => void }) {
   const [title, setTitle] = useState('');
@@ -29,47 +29,93 @@ function NewOrder({ inv, onClose }: { inv: Inventory; onClose: () => void }) {
     }
   };
 
+  const nextNo = (inv.data.workOrders.reduce((m, w) => Math.max(m, w.no), 0)) + 1;
+
   return (
-    <Modal title="New work order" onClose={onClose}>
-      <div className="space-y-4">
+    <Modal
+      title="Create Work Order"
+      subtitle={`Assigned Number: Work Order #${nextNo}`}
+      onClose={onClose}
+      wide
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+        className="space-y-3"
+      >
         <ErrorText message={error} />
-        <Field label="What needs to be done?">
-          <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
-        </Field>
-        <Field label="Device (optional)">
+
+        <FormRow label="Order Number" hint="Sequential ticket index">
+          <input
+            className={`${inputCls} bg-slate-50 font-mono text-slate-500 cursor-not-allowed`}
+            value={`Work Order #${nextNo}`}
+            disabled
+            readOnly
+          />
+        </FormRow>
+
+        <FormRow label="Task Title" required hint="What needs to be done?">
+          <input
+            className={inputCls}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Switch not responding / Replace battery"
+            autoFocus
+            required
+          />
+        </FormRow>
+
+        <FormRow label="Target Device" hint="Optional equipment linkage">
           <select className={inputCls} value={deviceSerial} onChange={(e) => setDeviceSerial(e.target.value)}>
-            <option value="">No device</option>
+            <option value="">No device linked</option>
             {inv.data.devices.map((d) => (
               <option key={d.id} value={d.serial}>
-                {d.name} — {d.serial}
+                {d.name} — {d.serial} ({d.plant})
               </option>
             ))}
           </select>
-        </Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Priority">
-            <select className={inputCls} value={priority} onChange={(e) => setPriority(e.target.value as Priority)}>
-              {PRIORITIES.map((p) => (
-                <option key={p}>{p}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Assigned to">
-            <input className={inputCls} value={assignee} onChange={(e) => setAssignee(e.target.value)} />
-          </Field>
-        </div>
-        <Field label="Notes">
-          <textarea className={inputCls} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </Field>
-        <div className="flex justify-end gap-2">
-          <button type="button" className={btnOutline} onClick={onClose}>
+        </FormRow>
+
+        <FormRow label="Priority Level">
+          <select className={inputCls} value={priority} onChange={(e) => setPriority(e.target.value as Priority)}>
+            {PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {p} Priority
+              </option>
+            ))}
+          </select>
+        </FormRow>
+
+        <FormRow label="Assigned Technician" hint="Person or team in charge">
+          <input
+            className={inputCls}
+            value={assignee}
+            onChange={(e) => setAssignee(e.target.value)}
+            placeholder="e.g. IT Team / Hardware Tech"
+          />
+        </FormRow>
+
+        <FormRow label="Action Notes">
+          <textarea
+            className={inputCls}
+            rows={3}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Detailed instructions, troubleshooting steps, or diagnostic notes..."
+          />
+        </FormRow>
+
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+          <button type="button" className={btnOutline} onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button type="button" className={btnPrimary} onClick={save} disabled={saving}>
-            {saving ? 'Creating...' : 'Create'}
+          <button type="submit" className={btnPrimary} disabled={saving}>
+            {saving ? 'Creating...' : 'Create Work Order'}
           </button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }

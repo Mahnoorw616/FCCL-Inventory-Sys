@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import type { Inventory } from '../store/useInventory';
 import type { Supplier } from '../types/inventory';
-import { btnOutline, btnPrimary, Empty, ErrorText, Field, iconBtn, inputCls, Modal, PageTitle } from './ui';
+import { btnOutline, btnPrimary, Empty, ErrorText, Field, FormRow, iconBtn, inputCls, Modal, PageTitle } from './ui';
 
 function SupplierForm({ inv, supplier, onClose }: { inv: Inventory; supplier: Supplier | null; onClose: () => void }) {
   const [name, setName] = useState(supplier?.name ?? '');
@@ -30,35 +30,78 @@ function SupplierForm({ inv, supplier, onClose }: { inv: Inventory; supplier: Su
   };
 
   return (
-    <Modal title={supplier ? 'Edit supplier' : 'Add supplier'} onClose={onClose}>
-      <div className="space-y-4">
+    <Modal
+      title={supplier ? 'Edit Supplier' : 'Register Supplier'}
+      subtitle={supplier ? `Vendor: ${supplier.name}` : 'Vendor & parts distributor profile'}
+      onClose={onClose}
+      wide
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+        className="space-y-3"
+      >
         <ErrorText message={error} />
-        <Field label="Supplier name">
-          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-        </Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Contact person">
-            <input className={inputCls} value={contact} onChange={(e) => setContact(e.target.value)} />
-          </Field>
-          <Field label="Phone">
-            <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </Field>
-        </div>
-        <Field label="Email">
-          <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </Field>
-        <Field label="What they supply">
-          <input className={inputCls} value={supplies} onChange={(e) => setSupplies(e.target.value)} />
-        </Field>
-        <div className="flex justify-end gap-2">
-          <button type="button" className={btnOutline} onClick={onClose}>
+
+        <FormRow label="Supplier Name" required hint="Company or vendor entity">
+          <input
+            className={inputCls}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Dell Technologies Pakistan"
+            autoFocus
+            required
+          />
+        </FormRow>
+
+        <FormRow label="Contact Person" hint="Account manager or point of contact">
+          <input
+            className={inputCls}
+            value={contact}
+            onChange={(e) => setContact(e.target.value)}
+            placeholder="e.g. Sales Desk / Muhammad Ali"
+          />
+        </FormRow>
+
+        <FormRow label="Phone Number" hint="Direct phone or mobile">
+          <input
+            className={inputCls}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="e.g. +92 51 1234567"
+          />
+        </FormRow>
+
+        <FormRow label="Email Address">
+          <input
+            className={inputCls}
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="e.g. sales@vendor.com"
+          />
+        </FormRow>
+
+        <FormRow label="What they supply" hint="Catalog tags or component categories">
+          <input
+            className={inputCls}
+            value={supplies}
+            onChange={(e) => setSupplies(e.target.value)}
+            placeholder="e.g. Laptop parts, SSDs, memory, power supplies"
+          />
+        </FormRow>
+
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+          <button type="button" className={btnOutline} onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button type="button" className={btnPrimary} onClick={save} disabled={saving}>
-            {saving ? 'Saving...' : supplier ? 'Save changes' : 'Add supplier'}
+          <button type="submit" className={btnPrimary} disabled={saving}>
+            {saving ? 'Saving...' : supplier ? 'Save Changes' : 'Register Supplier'}
           </button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }
